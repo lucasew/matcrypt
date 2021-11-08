@@ -10,9 +10,6 @@
 
 float *key = NULL;
 int *buf = NULL;
-float *calcMat = NULL;
-float *tempMat = NULL;
-float *resMat = NULL;
 int keysize;
 int blocksize;
 
@@ -87,6 +84,8 @@ int write_buffer_int(int *buf, size_t size) {
 }
 
 void handle_enc() {
+    float *calcMat = alloc_shaped_matrix();
+    float *tempMat = alloc_shaped_matrix();
     while(!feof(stdin)) {
         int nbytes = read_buffer_char(buf, blocksize);
         if (!nbytes) continue;
@@ -99,9 +98,13 @@ void handle_enc() {
         encode_matrix(buf, tempMat, blocksize);
         write_buffer_int(buf, blocksize);
     }
+    free(calcMat);
+    free(tempMat);
 }
 
 void handle_dec() {
+    float *calcMat = alloc_shaped_matrix();
+    float *tempMat = alloc_shaped_matrix();
     inverse(key, tempMat);
     for (int i = 0; i < blocksize; i++) {
         /* printf("%f <-> %f\n", key[i], tempMat[i]); */
@@ -111,7 +114,7 @@ void handle_dec() {
         int nbytes = read_buffer_int(buf, blocksize);
         if (!nbytes) continue;
         if (nbytes != blocksize) {
-            die("sucked block with %i bytes but expected a block with exacly %i bytes", nbytes, blocksize);
+            die("puxado bloco com %i bytes mas esperado bloco com exatamente %i bytes", nbytes, blocksize);
         }
         int writeSize = blocksize;
         decode_matrix(buf, calcMat, blocksize);
@@ -120,7 +123,7 @@ void handle_dec() {
         for (int i = blocksize - 1; i >= 0; i--) {
             if (buf[i] == -1) {
                 writeSize--;
-                warn("filling the rest\n");
+                warn("preenchendo o resto\n");
             }
         }
         write_buffer_char(buf, nbytes);
@@ -183,9 +186,6 @@ int main(int argc, char *argv[]) {
     blocksize = keysize * keysize;
 
     key = alloc_shaped_matrix();
-    calcMat = alloc_shaped_matrix();
-    tempMat = alloc_shaped_matrix();
-    resMat = alloc_shaped_matrix();
     buf = malloc(sizeof(int) * argc);
 
     for (int i = 0; i < argc; i++) {
@@ -197,6 +197,7 @@ int main(int argc, char *argv[]) {
     } else if (!strcmp(command, "dec")) {
         handle_dec();
     } else {
+        usage();
         die("comando não encontrado");
     }
     /* free(key); */
