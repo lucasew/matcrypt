@@ -8,10 +8,6 @@
 #define die(...) fprintf(stderr, "erro: "); fprintf(stderr, __VA_ARGS__); exit(1)
 #define warn(...) fprintf(stderr, "aviso: "); fprintf(stderr, __VA_ARGS__)
 
-void mat_transpose(float *num, float *fac, int r, float *ret);
-void mat_cofactor(float *num, float *ret);
-float mat_determinant(float *a, int k);
-
 float *key = NULL;
 int *buf = NULL;
 float *calcMat = NULL;
@@ -19,6 +15,11 @@ float *tempMat = NULL;
 float *resMat = NULL;
 int keysize;
 int blocksize;
+
+int inverse(float *A, float *inverse);
+void adjoint(float *A, float *adj);
+float determinant(float *A, int n);
+void getCofactor(float *A, float *temp, int p, int q, int n);
 
 float *alloc_shaped_matrix() {
     return malloc(sizeof(float)*blocksize);
@@ -32,13 +33,13 @@ void usage() {
 
 void decode_matrix(int *buf, float *mat, int size) {
     for (int i = 0; i < size; i++) {
-        mat[i] = buf[i];
+        mat[i] = (float)buf[i];
     }
 }
 
 void encode_matrix(int *buf, float *mat, int size) {
     for (int i = 0; i < size; i++) {
-        buf[i] = mat[i];
+        buf[i] = (int)roundf(mat[i]);
     }
 }
 void mat_mul(float *a, float *b, float *res, int magnitude) {
@@ -50,13 +51,6 @@ void mat_mul(float *a, float *b, float *res, int magnitude) {
             }
         }
     }
-}
-
-void mat_invert(float *min, float *ret) {
-    if (mat_determinant(min, keysize) == 0) {
-        die("chave inválida, determinante = 0");
-    }
-    mat_cofactor(min, ret);
 }
 
 int read_buffer_int(int *buf, int size) {
@@ -108,7 +102,7 @@ void handle_enc() {
 }
 
 void handle_dec() {
-    mat_invert(key, tempMat);
+    inverse(key, tempMat);
     for (int i = 0; i < blocksize; i++) {
         /* printf("%f <-> %f\n", key[i], tempMat[i]); */
     }
@@ -160,11 +154,11 @@ void healthcheck() {
         assert(res);
     }
     // inversa
-    /* keysize = 3; */
+    keysize = 3;
     float mtin[] = {1, 2, 3, 0, 1, 4, 5, 6, 0};
     float mout[] = {-24, 18, 5, 20, -15, -4, -5, 4, 1};
     float *mtemp = malloc(sizeof(float)*3*3);
-    mat_cofactor(mtin, mtemp);
+    inverse(mtin, mtemp);
     for (int i = 0; i < 3*3; i++) {
         printf("certo = %f, nosso = %f\n", mout[i], mtemp[i]);
     }
@@ -202,6 +196,8 @@ int main(int argc, char *argv[]) {
         handle_enc();
     } else if (!strcmp(command, "dec")) {
         handle_dec();
+    } else {
+        die("comando não encontrado");
     }
     /* free(key); */
     /* free(buf); */
@@ -212,90 +208,115 @@ int main(int argc, char *argv[]) {
     return 0;
 }
 
-// NOTA para o meu eu do futuro: cuida com as estruturas recursivas aqui, pode dar BO
-float mat_determinant(float *a, int k) {
-    float s = 1, det = 0;
-    float *b = alloc_shaped_matrix();
-    int i, j, m, n, c;
-    if (k == 1) {
-        return a[0];
-    } else {
-        det = 0;
-        for (c = 0; c < k; c++) {
-            m = 0;
-            n = 0;
-            for (i = 0;i < k; i++) {
-                for (j = 0 ;j < k; j++) {
-                    b[(i*keysize) + j] = 0;
-                    if (i != 0 && j != c) {
-                        b[(m*keysize) + n] = a[(i*keysize) + j];
-                        if (n < (k - 2)) {
-                            n++;
-                        }
-                        else {
-                            n = 0;
-                            m++;
-                        }
-                    }
-                }
-            }
-            det = det + s * (a[(keysize*0) + c] * mat_determinant(b, k - 1));
-            s = -1 * s;
-        }
-    }
-    /* free(b); */
-    return det;
+// Function to get cofactor of A[p][q] in temp[][]. n is current
+// dimension of A[][]
+void getCofactor(float *A, float *temp, int p, int q, int n)
+{
+	int i = 0, j = 0;
+
+	// Looping for each element of the matrix
+	for (int row = 0; row < n; row++)
+	{
+		for (int col = 0; col < n; col++)
+		{
+			// Copying into temporary matrix only those element
+			// which are not in given row and column
+			if (row != p && col != q)
+			{
+                temp[i*keysize + j++] = A[row*keysize + col];
+
+				// Row is filled, so increase row index and
+				// reset col index
+				if (j == n - 1)
+				{
+					j = 0;
+					i++;
+				}
+			}
+		}
+	}
 }
 
+/* Recursive function for finding determinant of matrix.
+n is current dimension of A[][]. */
+float determinant(float *A, int n)
+{
+	float D = 0; // Initialize result
 
-// function for cofactor calculation
-void mat_cofactor(float *num, float *ret) {
-    float *b = alloc_shaped_matrix();
-    float *fac = alloc_shaped_matrix();
-    int p, q, m, n, i, j;
-    for (q = 0;q < keysize; q++) {
-        for (p = 0;p < keysize; p++) {
-            m = 0;
-            n = 0;
-            for (i = 0;i < keysize; i++) {
-                for (j = 0;j < keysize; j++) {
-                    if (i != q && j != p) {
-                        b[(m*keysize) + n] = num[(i*keysize) + j];
-                        if (n < (keysize - 2)) {
-                            n++;
-                        } else {
-                            n = 0;
-                            m++;
-                        }
-                    }
-                }
-            }
-            fac[(q*keysize) + p] = pow(-1, q + p) * mat_determinant(b, keysize - 1);
-        }
-    }
-    mat_transpose(num, fac, keysize , ret);
-    /* free(b); */
-    /* free(fac); */
+	// Base case : if matrix contains single element
+	if (n == 1)
+		return A[0];
+
+    float *temp = alloc_shaped_matrix(); // To store cofactors
+
+	int sign = 1; // To store sign multiplier
+
+	// Iterate for each element of first row
+	for (int f = 0; f < n; f++)
+	{
+		// Getting Cofactor of A[0][f]
+		getCofactor(A, temp, 0, f, n);
+		D += sign * A[f] * determinant(temp, n - 1);
+
+		// terms are to be added with alternate sign
+		sign = -sign;
+	}
+    free(temp);
+	return D;
 }
 
+// Function to get adjoint of A[N][N] in adj[N][N].
+void adjoint(float *A, float *adj)
+{
+	if (keysize == 1)
+	{
+		adj[0] = 1;
+		return;
+	}
 
-///function to find the transpose of a matrix
-void mat_transpose(float *num, float *fac, int r, float *ret) {
-    int i, j;
-    float *b = alloc_shaped_matrix();
-    /* float *inverse = alloc_shaped_matrix(); */
-    float d;
-    for (i = 0;i < r; i++) {
-        for (j = 0;j < r; j++) {
-            b[(i*blocksize) + j] = fac[(j*blocksize) + i];
-        }
-    }
-    d = mat_determinant(num, r);
-    for (i = 0;i < r; i++) {
-        for (j = 0;j < r; j++) {
-            /* printf("chegou no preenchimento\n"); */
-            ret[(i*blocksize) + j] = b[(i*blocksize) + j] / d;
-        }
-    }
+	// temp is used to store cofactors of A[][]
+	int sign = 1;
+    float *temp = alloc_shaped_matrix();
+
+	for (int i=0; i<keysize; i++)
+	{
+		for (int j=0; j<keysize; j++)
+		{
+			// Get cofactor of A[i][j]
+			getCofactor(A, temp, i, j, keysize);
+
+			// sign of adj[j][i] positive if sum of row
+			// and column indexes is even.
+			sign = ((i+j)%2==0)? 1: -1;
+
+			// Interchanging rows and columns to get the
+			// transpose of the cofactor matrix
+			adj[j*keysize + i] = (sign)*(determinant(temp, keysize -1));
+		}
+	}
+}
+
+// Function to calculate and store inverse, returns false if
+// matrix is singular
+int inverse(float *A, float *inverse)
+{
+	// Find determinant of A[][]
+	int det = determinant(A, keysize);
+	if (det == 0)
+	{
+        die("matriz singular, não é possível calcular a chave de descriptografia");
+		return 0;
+	}
+
+	// Find adjoint
+    float *adj = alloc_shaped_matrix();
+	adjoint(A, adj);
+
+	// Find Inverse using formula "inverse(A) = adj(A)/det(A)"
+	for (int i=0; i<keysize; i++)
+		for (int j=0; j<keysize; j++)
+			inverse[i*keysize + j] = adj[i*keysize + j]/det;
+
+	return 1;
 }
 
