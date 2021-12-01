@@ -51,12 +51,14 @@ void mat_mul(float *a, float *b, float *res, int magnitude) {
 }
 
 int read_buffer_int(int *buf, int size) {
-    for (int i = 0; i < size * (sizeof(int)/sizeof(char)); i++) {
+    char *cbuf = (char*)buf;
+    const size_t sz = sizeof(int)/sizeof(char);
+    for (int i = 0; i < size * sz; i++) {
         int c = getc(stdin);
-        if (c == EOF) {
-            return i / (sizeof(int)/sizeof(char));
-        }
-        *((char*)buf + i) = c;
+        /* if (c == EOF) { */
+        /*     return (i % sz ? i - (i%sz) + sz : i) / sz; // se falta pra fechar vai até o próximo */
+        /* } */
+        cbuf[i] = c;
     }
     return size;
 }
@@ -64,9 +66,9 @@ int read_buffer_int(int *buf, int size) {
 int read_buffer_char(int *buf, int size) {
     for (int i = 0; i < size; i++) {
         int c = getc(stdin);
-        if (c == EOF) {
-            return i;
-        }
+        /* if (c == EOF) { */
+        /*     return i; */
+        /* } */
         buf[i] = c;
     }
     return size;
@@ -74,13 +76,19 @@ int read_buffer_char(int *buf, int size) {
 
 int write_buffer_char(int *buf, int size) {
     for (int i = 0; i < size; i++) {
-        fwrite(buf + i, sizeof(char), 1, stdout);
+        putc(buf[i], stdout);
     }
     return size;
 }
 
 int write_buffer_int(int *buf, size_t size) {
-    return fwrite(buf, sizeof(int), size, stdout);
+    char *cbuf = (char*)buf;
+    const size_t sz = size * sizeof(int)/sizeof(char);
+    for (int i = 0; i < sz; i++) {
+        putc(cbuf[i], stdout);
+    }
+    return sz;
+    /* return fwrite(buf, sizeof(int), size, stdout); */
 }
 
 void handle_enc() {
@@ -88,7 +96,7 @@ void handle_enc() {
     float *tempMat = alloc_shaped_matrix();
     while(!feof(stdin)) {
         int nbytes = read_buffer_char(buf, blocksize);
-        if (!nbytes) continue;
+        if (nbytes == 0) continue;
         for (int i = nbytes; i < blocksize; i++) {
             buf[i] = -1; // completa o que falta com -1
         }
@@ -112,7 +120,7 @@ void handle_dec() {
     memcpy(key, tempMat, sizeof(float)*blocksize); // inversão da chave
     while(!feof(stdin)) {
         int nbytes = read_buffer_int(buf, blocksize);
-        if (!nbytes) continue;
+        if (nbytes == 0) continue;
         if (nbytes != blocksize) {
             die("puxado bloco com %i bytes mas esperado bloco com exatamente %i bytes", nbytes, blocksize);
         }

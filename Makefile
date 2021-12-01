@@ -1,5 +1,5 @@
 CFLAGS=-Wall -g
-LDFLAGS=-lm
+LDFLAGS=-lm -O0
 
 compile: main.o
 	$(CC) *.o -o matcrypt $(LDFLAGS)
