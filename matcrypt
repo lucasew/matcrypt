@@ -3,7 +3,14 @@ set -eu
 
 ROOT_DIR=`dirname "$(realpath "$0")"`
 
-which nix 2> /dev/null > /dev/null && {
+function has_binary {
+    which $1 2> /dev/null > /dev/null
+}
+function has_numpy {
+    python3 -c 'import numpy as np' 2> /dev/null > /dev/null
+}
+
+if has_binary nix; then
     TMPFILE=`mktemp`
     cat << EOF > "$TMPFILE"
 with import <nixpkgs> {};
@@ -15,17 +22,22 @@ EOF
     out="$(nix-build "$TMPFILE" --no-out-link)"
     PATH="$out/bin:$PATH"
     python3 "$ROOT_DIR/matcrypt.py" "$@"
-}
+    exit 0
+fi
 
-which python3 2> /dev/null > /dev/null || {
-    echo "Python 3 não instalado, não tenho muito o que fazer ¯\_(ツ)_/¯"
+if has_binary python3; then
+    if has_numpy; then
+        python3 "$ROOT_DIR/matcrypt.py" "$@"
+        exit 0
+    fi
+fi
+if ! has_binary wget; then
+    echo "O comando wget é necessário para o plano B"
     exit 1
-}
+fi
 
-python3 -c 'import numpy as np' 2> /dev/null > /dev/null || {
-    echo "Sem numpy instalado"
-    exit 1
-}
-
-python3 "$ROOT_DIR/matcrypt.py" "$@"
+PYTHON_NUMPY="$(dirname $(mktemp))/python_numpy"
+wget -c https://github.com/lucasew/matcrypt/releases/download/assets/python_numpy_bundle -O "$PYTHON_NUMPY"
+chmod +x "$PYTHON_NUMPY"
+"$PYTHON_NUMPY" "$ROOT_DIR/matcrypt.py" "$@"
 
