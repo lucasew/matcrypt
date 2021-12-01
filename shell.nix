@@ -1,8 +1,7 @@
 {pkgs ? import <nixpkgs> {}}:
 pkgs.mkShell {
   buildInputs = with pkgs; [
-    clang
-    ccls
-    gdb
+    python3
+    python3Packages.numpy
   ];
 }
